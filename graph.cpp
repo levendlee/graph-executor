@@ -3,16 +3,16 @@
 namespace graph_executor {
 
 void Graph::Execute() const {
-  bool has_execution = false;
+  bool action = false;
   do {
-    has_execution = false;
-    for (const std::unique_ptr<Node>& node : nodes_) {
+    action = false;
+    for (const std::unique_ptr<Node> &node : nodes_) {
       if (node->IsReady()) {
-        node->ExecuteWithNotification();
-        has_execution = true;
+        node->ExecuteAndNotifyComplete();
+        action = true;
       }
     }
-  } while (has_execution);
+  } while (action);
 };
 
-}  // namespace graph_executor
+} // namespace graph_executor

@@ -11,23 +11,23 @@ namespace graph_executor {
 
 // Virtual base class of execution graph.
 class Graph {
- public:
-  Graph(std::vector<std::unique_ptr<Node>>&& nodes,
-        std::vector<std::unique_ptr<Context>>&& contexts)
+public:
+  Graph(std::vector<std::unique_ptr<Node>> &&nodes,
+        std::vector<std::unique_ptr<Context>> &&contexts)
       : nodes_(std::move(nodes)), contexts_(std::move(contexts)) {}
-  virtual ~Graph() {}
+  virtual ~Graph() = default;
 
   // Not copyable. Movable.
-  Graph(const Graph& other) = delete;
-  Graph(Graph&& other) = default;
+  Graph(const Graph &other) = delete;
+  Graph(Graph &&other) = default;
 
   void Execute() const;
 
- private:
+private:
   std::vector<std::unique_ptr<Node>> nodes_;
   std::vector<std::unique_ptr<Context>> contexts_;
 };
 
-}  // namespace graph_executor
+} // namespace graph_executor
 
 #endif

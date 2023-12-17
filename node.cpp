@@ -4,30 +4,43 @@
 
 namespace graph_executor {
 
-void Node::Bind(const std::vector<Context*>& inputs,
-                const std::vector<Context*>& outputs) {
+void Node::Bind(const std::vector<Context *> &inputs,
+                const std::vector<Context *> &outputs) {
   inputs_ = inputs;
   outputs_ = outputs;
-};
+  for (Context *c : inputs) {
+    c->BindConsumer(this);
+  }
+  for (Context *c : outputs) {
+    c->BindProducer(this);
+  }
+}
 
 bool Node::IsReady() const {
-  for (const Context* c : outputs_) {
-    if (!c->IsConsumed()) {
+  // All previous outputs are consumed.
+  for (const Context *c : outputs_) {
+    if (!c->IsAllConsumed()) {
       return false;
     }
   }
-  for (const Context* c : inputs_) {
+  // All current inputs are produced.
+  for (const Context *c : inputs_) {
     if (!c->IsProduced()) {
       return false;
     }
   }
   return true;
-};
+}
 
 void Node::NotifyComplete() const {
-  for (Context* c : inputs_) {
-    c->Consume();
+  // All outputs are produced.
+  for (Context *c : outputs_) {
+    c->MarkProduced();
   }
-};
+  // All inputs are consumed.
+  for (Context *c : inputs_) {
+    c->MarkConsumed();
+  }
+}
 
-}  // namespace graph_executor
+} // namespace graph_executor

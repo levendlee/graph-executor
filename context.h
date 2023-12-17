@@ -10,77 +10,77 @@ class Node;
 
 // Virtaul base class of context switched between nodes.
 class Context {
- public:
-  // Constructs `Context` with pointers to producer and consumer `Node*`.
-  // But not ownership.
-  Context(const Node* producer, const std::vector<Node*>& consumers)
-      : ref_count_(0), producer_(producer), consumers_(consumers) {}
-  virtual ~Context() {}
+public:
+  // Constructs context with pointers to producer and consumer nodes.
+  // No ownership.
+  Context() : has_value_(false), ref_count_(0) {}
+  virtual ~Context() = default;
 
   // Not copyable. Movable.
-  Context(const Context& other) = delete;
-  Context(Context&& other) = default;
+  Context(const Context &other) = delete;
+  Context(Context &&other) = default;
 
-  const Node* Producer() const { return producer_; };
-  const std::vector<Node*>& Consumers() const { return consumers_; };
+  const Node *Producer() const { return producer_; };
+  const std::vector<Node *> &Consumers() const { return consumers_; };
 
   // Whether this context is produced by this producer.
-  bool IsProduced() const { return ref_count_ != 0; }
+  bool IsProduced() const { return has_value_; }
   // Whether this context is consumed by all this consumers.
-  bool IsConsumed() const { return ref_count_ == 0; }
+  bool IsAllConsumed() const { return ref_count_ == 0; }
 
-  // Producer uses this function to indicate the context is ready.
-  template <typename T>
-  void Produce(T&& value) {
-    Store(reinterpret_cast<void*>(new T(value)));
-    ref_count_ = consumers_.size();
-  };
-  // Consumer uses this function to access the context.
-  template <typename T>
-  const T& Evaluate() const {
-    void* ptr;
-    Read(&ptr);
-    return *reinterpret_cast<T*>(ptr);
+  // Puts data to context.
+  template <typename T> void Put(T &&value) {
+    has_value_ = true;
+    Write(reinterpret_cast<void *>(new T(value)));
   }
-  // Consumer uses this function to indicate the context is consumed.
-  void Consume();
+  // Gets data from context.
+  template <typename T> const T &Get() const {
+    return *reinterpret_cast<T *>(Read());
+  }
+  // Marks the context is produced by the producer.
+  void MarkProduced();
+  // Marks the context is consumed by one of the consumers.
+  void MarkConsumed();
 
   friend class Node;
 
- protected:
+protected:
+  void BindProducer(Node *producer);
+  void BindConsumer(Node *consumer);
+
   // Reades the value of the context.
-  virtual void Read(void** value) const = 0;
-  // Stores the value of the context.
-  virtual void Store(void* value) = 0;
+  virtual void *Read() const = 0;
+  // Writes the value of the context.
+  virtual void Write(void *value) = 0;
   // Releases the value of the context.
   virtual void Release() = 0;
 
- private:
+private:
+  bool has_value_;
   int ref_count_;
-  const Node* producer_;
-  const std::vector<Node*> consumers_;
+  Node *producer_;
+  std::vector<Node *> consumers_;
 };
 
-template <typename T>
-class GenericContext : public Context {
- public:
+template <typename T> class GenericContext : public Context {
+public:
   using Context::Context;
 
- protected:
-  virtual void Store(void* value) final {
-    data_ = std::unique_ptr<T>(reinterpret_cast<T*>(value));
+protected:
+  virtual void *Read() const final {
+    return reinterpret_cast<void *>(data_.get());
+  };
+
+  virtual void Write(void *value) final {
+    data_ = std::unique_ptr<T>(reinterpret_cast<T *>(value));
   }
 
   virtual void Release() final { data_ = nullptr; }
 
-  virtual void Read(void** value) const final {
-    *reinterpret_cast<T**>(value) = data_.get();
-  };
-
- private:
+private:
   std::unique_ptr<T> data_;
 };
 
-}  // namespace graph_executor
+} // namespace graph_executor
 
 #endif
