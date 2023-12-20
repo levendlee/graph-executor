@@ -2,16 +2,18 @@
 
 A producer-consumer model based asychronous graph executor that targets at
 parallelsim at:
-- Per node level: Different nodes inside the same run can execute 
+- Per node level: Different nodes inside the same run can execute
   concurrently.
 - Per run level: Different nodes inside the different runs can execute
   concurrently.
 
 Example:
 
+```text
        -> B (2s)
 A (1s) -> C (3s) -> E (5s)
        -> D (4s)
+```
 
 For 10 executions:
 
