@@ -8,7 +8,7 @@ void Graph::Execute() const {
     action = false;
     for (const std::unique_ptr<Node> &node : nodes_) {
       if (node->IsReady()) {
-        node->ExecuteAndNotifyComplete();
+        node->Execute();
         action = true;
       }
     }

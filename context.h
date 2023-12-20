@@ -1,19 +1,34 @@
 #ifndef _CONTEXT_H_
 #define _CONTEXT_H_
 
+#include <cassert>
 #include <memory>
 #include <vector>
 
 namespace graph_executor {
 
+class Context;
 class Node;
+
+template <typename T> class DataRef final {
+public:
+  DataRef(T *data, Context* context)
+      : data_(data), context_(context) {}
+  ~DataRef();
+
+  const T &operator*() const { return *data_; }
+
+private:
+  T *data_;
+  Context* context_;
+};
 
 // Virtaul base class of context switched between nodes.
 class Context {
 public:
   // Constructs context with pointers to producer and consumer nodes.
   // No ownership.
-  Context() : has_value_(false), ref_count_(0) {}
+  Context() = default;
   virtual ~Context() = default;
 
   // Not copyable. Movable.
@@ -23,24 +38,26 @@ public:
   const Node *Producer() const { return producer_; };
   const std::vector<Node *> &Consumers() const { return consumers_; };
 
-  // Whether this context is produced by this producer.
-  bool IsProduced() const { return has_value_; }
-  // Whether this context is consumed by all this consumers.
-  bool IsAllConsumed() const { return ref_count_ == 0; }
+  // Whether can put data to this context.
+  virtual bool CanPut() const = 0;
+  // Whether can get data from this context.
+  virtual bool CanGet() const = 0;
 
-  // Puts data to context.
+  // Puts data to this context.
+  // Each producer should only call this function once for the same data.
   template <typename T> void Put(T &&value) {
-    has_value_ = true;
-    Write(reinterpret_cast<void *>(new T(value)));
+    assert(CanPut());
+    PutGeneric(reinterpret_cast<void *>(new T(value)));
   }
-  // Gets data from context.
-  template <typename T> const T &Get() const {
-    return *reinterpret_cast<T *>(Read());
+  // Gets data from this context.
+  // Conceptually, there are N copies for N consumers.
+  // Each consumer should only call this function once for the same data.
+  template <typename T> DataRef<T> Get() {
+    assert(CanGet());
+    return DataRef<T>(reinterpret_cast<T *>(GetGeneric()), this);
   }
-  // Marks the context is produced by the producer.
-  void MarkProduced();
-  // Marks the context is consumed by one of the consumers.
-  void MarkConsumed();
+  // Release data from this context.
+  virtual void Release() = 0;
 
   friend class Node;
 
@@ -48,37 +65,58 @@ protected:
   void BindProducer(Node *producer);
   void BindConsumer(Node *consumer);
 
-  // Reades the value of the context.
-  virtual void *Read() const = 0;
-  // Writes the value of the context.
-  virtual void Write(void *value) = 0;
-  // Releases the value of the context.
-  virtual void Release() = 0;
+  // Puts data to this context using generic type (void*).
+  virtual void PutGeneric(void *value) = 0;
+  // Gets data from this context using generic type (void*).
+  virtual void *GetGeneric() const = 0;
 
-private:
-  bool has_value_;
-  int ref_count_;
-  Node *producer_;
+  Node * producer_;
   std::vector<Node *> consumers_;
 };
+
+template <typename T>
+DataRef<T>::~DataRef() {
+  context_->Release();
+}
+
 
 template <typename T> class GenericContext : public Context {
 public:
   using Context::Context;
 
-protected:
-  virtual void *Read() const final {
-    return reinterpret_cast<void *>(data_.get());
-  };
+  virtual bool CanPut() const  { return data_ == nullptr; }
+  virtual bool CanGet() const { return data_ != nullptr; }
 
-  virtual void Write(void *value) final {
+protected:
+  virtual void PutGeneric(void *value) {
+    ref_count_ = consumers_.size();
     data_ = std::unique_ptr<T>(reinterpret_cast<T *>(value));
   }
 
-  virtual void Release() final { data_ = nullptr; }
+  virtual void *GetGeneric() const {
+    return reinterpret_cast<void *>(data_.get());
+  }
+
+  virtual void Release() {
+    if (!--ref_count_) {
+      data_ = nullptr;
+    }
+  }
 
 private:
+  int ref_count_;
   std::unique_ptr<T> data_;
+};
+
+template <typename T> class StreamContext : public GenericContext<T> {
+public:
+
+protected:
+  // Unconditionally put.
+  virtual bool CanPut() const { return true; }
+  
+  // Unconditionally hold.
+  virtual void Relase() final {};
 };
 
 } // namespace graph_executor

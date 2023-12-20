@@ -19,28 +19,17 @@ void Node::Bind(const std::vector<Context *> &inputs,
 bool Node::IsReady() const {
   // All previous outputs are consumed.
   for (const Context *c : outputs_) {
-    if (!c->IsAllConsumed()) {
+    if (!c->CanPut()) {
       return false;
     }
   }
   // All current inputs are produced.
   for (const Context *c : inputs_) {
-    if (!c->IsProduced()) {
+    if (!c->CanGet()) {
       return false;
     }
   }
   return true;
-}
-
-void Node::NotifyComplete() const {
-  // All outputs are produced.
-  for (Context *c : outputs_) {
-    c->MarkProduced();
-  }
-  // All inputs are consumed.
-  for (Context *c : inputs_) {
-    c->MarkConsumed();
-  }
 }
 
 } // namespace graph_executor

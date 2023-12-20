@@ -33,22 +33,10 @@ public:
   // Executes the node.
   virtual void Execute() const = 0;
 
-  // Executes the node and notifies the downstream that execution is completed.
-  // One can overwrite this function to eagerly marks inputs are consumed when
-  // they are no longer needed, marks outputs are produced when they are
-  // generated.
-  virtual void ExecuteAndNotifyComplete() const {
-    Execute();
-    NotifyComplete();
-  };
-
   friend class Context;
   friend class Graph;
 
 protected:
-  // Notifies downstream that execution is completed.
-  void NotifyComplete() const;
-
   std::vector<Context *> inputs_;
   std::vector<Context *> outputs_;
 };

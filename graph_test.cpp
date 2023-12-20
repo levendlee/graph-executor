@@ -13,9 +13,9 @@ namespace graph_executor {
 template <typename T> class Add : public Node {
 public:
   void Execute() const {
-    const T &lhs = inputs_[0]->template Get<T>();
-    const T &rhs = inputs_[1]->template Get<T>();
-    T result = lhs + rhs;
+    DataRef<T> lhs = inputs_[0]->template Get<T>();
+    DataRef<T> rhs = inputs_[1]->template Get<T>();
+    T result = *lhs + *rhs;
     outputs_[0]->Put(std::move(result));
   };
 };
@@ -32,7 +32,7 @@ void SimpleGraphRun() {
   Node *n = new Add<int>();
   Context *c0 = new GenericContext<int>();
   Context *c1 = new GenericContext<int>();
-  Context *c2 = new GenericContext<int>();
+  Context *c2 = new StreamContext<int>();
 
   n->Bind({c0, c1}, {c2});
   
@@ -40,23 +40,19 @@ void SimpleGraphRun() {
 
   // 1st Execution.
   c0->Put(1);
-  c0->MarkProduced();
   c1->Put(2);
-  c1->MarkProduced();
   graph.Execute();
-  std::cout << "Output: " << (c2->IsProduced() ? "Produced" : "Not Produced")
+  std::cout << "Output: " << (c2->CanGet() ? "Produced" : "Not Produced")
             << "\n";
-  std::cout << "Value: " << c2->Get<int>() << "\n";
+  std::cout << "Value: " << *c2->Get<int>() << "\n";
   
   // 2nd Execution.
   c0->Put(10);
-  c0->MarkProduced();
   c1->Put(20);
-  c1->MarkProduced();
   graph.Execute();
-  std::cout << "Output: " << (c2->IsProduced() ? "Produced" : "Not Produced")
+  std::cout << "Output: " << (c2->CanGet() ? "Produced" : "Not Produced")
             << "\n";
-  std::cout << "Value: " << c2->Get<int>() << "\n";
+  std::cout << "Value: " << *c2->Get<int>() << "\n";
 }
 
 } // namespace graph_executor

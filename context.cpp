@@ -5,19 +5,6 @@
 
 namespace graph_executor {
 
-void Context::MarkProduced() {
-  assert(ref_count_ == 0);
-  ref_count_ = consumers_.size();
-}
-
-void Context::MarkConsumed() {
-  assert(ref_count_ > 0);
-  if (!--ref_count_) {
-    Release();
-    has_value_ = false;
-  }
-}
-
 void Context::BindProducer(Node *producer) {
   assert(producer_ == nullptr);
   producer_ = producer;
