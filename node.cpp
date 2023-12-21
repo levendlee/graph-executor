@@ -17,13 +17,13 @@ void Node::Bind(const std::vector<Context *> &inputs,
 }
 
 bool Node::IsReady() const {
-  // All previous outputs are consumed.
+  // Ensure we can put outputs to context.
   for (Context *c : outputs_) {
     if (!c->CanPut()) {
       return false;
     }
   }
-  // All current inputs are produced.
+  // Ensure we can get inputs from context.
   for (Context *c : inputs_) {
     if (!c->CanGet()) {
       return false;

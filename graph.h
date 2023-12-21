@@ -2,6 +2,7 @@
 #define _GRAPH_H_
 
 #include <condition_variable>
+#include <future>
 #include <memory>
 #include <queue>
 #include <thread>
@@ -26,21 +27,22 @@ public:
   Graph(const Graph &other) = delete;
   Graph(Graph &&other) = delete;
 
-  void Execute();
+  void Execute(int num_executions = 1);
 
 private:
   // Set up threads.
   void SetUp(int num_threads);
   // TearDown threads.
   void TearDown();
+
   // Worker thread.
   void WorkerThread(int thread_id);
 
   bool active_;
+  int concurrent_execution_;
 
-  std::mutex queue_mutex_;
-  std::mutex client_mutex_;
-  std::mutex worker_mutex_;
+  std::mutex mutex_;
+  std::condition_variable main_cv_;
   std::condition_variable client_cv_;
   std::condition_variable worker_cv_;
 

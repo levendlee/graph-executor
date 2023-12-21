@@ -10,10 +10,13 @@ namespace graph_executor {
 
 class Graph;
 
+// `Node` class itself doesn't handle any concurrency issues as it is stateless.
+// The user of `Node` class should handle it.
+
 // Virtual base class of execution nodes.
 class Node {
 public:
-  Node(const std::string &name = "") : name_(name){};
+  explicit Node(const std::string &name = "") : name_(name){};
   virtual ~Node() = default;
 
   // Not copyable. Movable.
@@ -28,15 +31,11 @@ public:
   void Bind(const std::vector<Context *> &inputs,
             const std::vector<Context *> &outputs);
 
-  // Whether the node has all the current inputs produced and all the previous
-  // outputs consumed.
+  // Whether the node can get inputs and put outputs.
   bool IsReady() const;
 
   // Executes the node.
   virtual void Execute() const = 0;
-
-  friend class Context;
-  friend class Graph;
 
 protected:
   std::string name_;
@@ -44,6 +43,8 @@ protected:
   std::vector<Context *> outputs_;
 };
 
+// A special execution node that does nothing. It can be used as inputs/outputs
+// nodes to concatenate contexts and create dependency.
 class NoOpNode : public Node {
 public:
   using Node::Node;

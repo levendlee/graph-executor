@@ -4,6 +4,7 @@
 #include <cassert>
 #include <memory>
 #include <mutex>
+#include <queue>
 #include <string>
 #include <vector>
 
@@ -116,14 +117,50 @@ private:
   std::unique_ptr<T> data_;
 };
 
-template <typename T> class StreamContext : public GenericContext<T> {
+// A buffered context that stores multiple instances of data.
+template <typename T> class BufferedContext : public Context {
 public:
-protected:
-  // Unconditionally put.
-  virtual bool CanPut() { return true; }
+  explicit BufferedContext(int max_size, const std::string &name = "")
+      : Context(name), max_size_(max_size){};
 
-  // Unconditionally hold.
-  virtual void Relase() final{};
+  virtual bool CanPut() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return queue_.size() < max_size_;
+  }
+  virtual bool CanGet() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return !queue_.empty();
+  }
+
+protected:
+  virtual void PutGeneric(void *value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (queue_.empty()) {
+      ref_count_ = consumers_.size();
+    }
+    queue_.push(std::unique_ptr<T>(reinterpret_cast<T *>(value)));
+  }
+
+  virtual void *GetGeneric() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return reinterpret_cast<void *>(queue_.front().get());
+  }
+
+  virtual void Release() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!--ref_count_) {
+      queue_.pop();
+      if (!queue_.empty()) {
+        ref_count_ = consumers_.size();
+      }
+    }
+  }
+
+private:
+  std::mutex mutex_;
+  int max_size_;
+  int ref_count_;
+  std::queue<std::unique_ptr<T>> queue_;
 };
 
 } // namespace graph_executor
