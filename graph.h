@@ -1,7 +1,10 @@
 #ifndef _GRAPH_H_
 #define _GRAPH_H_
 
+#include <condition_variable>
 #include <memory>
+#include <queue>
+#include <thread>
 #include <vector>
 
 #include "context.h"
@@ -12,18 +15,40 @@ namespace graph_executor {
 // Virtual base class of execution graph.
 class Graph {
 public:
-  Graph(std::vector<std::unique_ptr<Node>> &&nodes,
+  Graph(int num_threads, std::vector<std::unique_ptr<Node>> &&nodes,
         std::vector<std::unique_ptr<Context>> &&contexts)
-      : nodes_(std::move(nodes)), contexts_(std::move(contexts)) {}
-  virtual ~Graph() = default;
+      : nodes_(std::move(nodes)), contexts_(std::move(contexts)) {
+    SetUp(num_threads);
+  }
+  virtual ~Graph() { TearDown(); };
 
-  // Not copyable. Movable.
+  // Not copyable. Not movable.
   Graph(const Graph &other) = delete;
-  Graph(Graph &&other) = default;
+  Graph(Graph &&other) = delete;
 
-  void Execute() const;
+  void Execute();
 
 private:
+  // Set up threads.
+  void SetUp(int num_threads);
+  // TearDown threads.
+  void TearDown();
+  // Worker thread.
+  void WorkerThread(int thread_id);
+
+  bool active_;
+
+  std::mutex queue_mutex_;
+  std::mutex client_mutex_;
+  std::mutex worker_mutex_;
+  std::condition_variable client_cv_;
+  std::condition_variable worker_cv_;
+
+  std::queue<Node *> queue_;
+  std::vector<std::thread> threads_;
+
+  NoOpNode *input_node_;
+  NoOpNode *output_node_;
   std::vector<std::unique_ptr<Node>> nodes_;
   std::vector<std::unique_ptr<Context>> contexts_;
 };

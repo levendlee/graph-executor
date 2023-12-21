@@ -12,10 +12,13 @@ namespace graph_executor {
 
 template <typename T> class Add : public Node {
 public:
+  using Node::Node;
+
   void Execute() const {
     DataRef<T> lhs = inputs_[0]->template Get<T>();
     DataRef<T> rhs = inputs_[1]->template Get<T>();
     T result = *lhs + *rhs;
+    // std::cerr << "Add: " << *lhs << " + " << *rhs << " = " << result << "\n";
     outputs_[0]->Put(std::move(result));
   };
 };
@@ -29,30 +32,42 @@ template <typename T> auto WrapUniquePtr(std::vector<T *> ptr_vec) {
 }
 
 void SimpleGraphRun() {
-  Node *n = new Add<int>();
-  Context *c0 = new GenericContext<int>();
-  Context *c1 = new GenericContext<int>();
-  Context *c2 = new StreamContext<int>();
+  std::vector<Node *> nodes;
+  for (int i = 0; i < 10; ++i) {
+    nodes.push_back(new Add<int>(std::to_string(i)));
+  }
 
-  n->Bind({c0, c1}, {c2});
-  
-  Graph graph(WrapUniquePtr<Node>({n}), WrapUniquePtr<Context>({c0, c1, c2}));
+  std::vector<Context *> contexts;
+  for (int i = 0; i < 12; ++i) {
+    contexts.push_back(new GenericContext<int>(std::to_string(i)));
+  }
+
+  // Fabonacci series
+  // y1 = x1 + x2
+  // y2 = x2 + y1
+  // y3 = y1 + y2
+  // ...
+  for (int i = 0; i < 10; ++i) {
+    nodes[i]->Bind({contexts[i], contexts[i + 1]}, {contexts[i + 2]});
+  }
+
+  Graph graph(3, WrapUniquePtr(nodes), WrapUniquePtr(contexts));
 
   // 1st Execution.
-  c0->Put(1);
-  c1->Put(2);
+  contexts[0]->Put(1);
+  contexts[1]->Put(1);
   graph.Execute();
-  std::cout << "Output: " << (c2->CanGet() ? "Produced" : "Not Produced")
-            << "\n";
-  std::cout << "Value: " << *c2->Get<int>() << "\n";
-  
+  std::cout << "Output: "
+            << (contexts[11]->CanGet() ? "Produced" : "Not Produced") << "\n";
+  std::cout << "Value: " << *contexts[11]->Get<int>() << "\n";
+
   // 2nd Execution.
-  c0->Put(10);
-  c1->Put(20);
+  contexts[0]->Put(10);
+  contexts[1]->Put(10);
   graph.Execute();
-  std::cout << "Output: " << (c2->CanGet() ? "Produced" : "Not Produced")
-            << "\n";
-  std::cout << "Value: " << *c2->Get<int>() << "\n";
+  std::cout << "Output: "
+            << (contexts[11]->CanGet() ? "Produced" : "Not Produced") << "\n";
+  std::cout << "Value: " << *contexts[11]->Get<int>() << "\n";
 }
 
 } // namespace graph_executor

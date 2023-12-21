@@ -3,6 +3,8 @@
 
 #include <cassert>
 #include <memory>
+#include <mutex>
+#include <string>
 #include <vector>
 
 namespace graph_executor {
@@ -12,15 +14,14 @@ class Node;
 
 template <typename T> class DataRef final {
 public:
-  DataRef(T *data, Context* context)
-      : data_(data), context_(context) {}
+  DataRef(T *data, Context *context) : data_(data), context_(context) {}
   ~DataRef();
 
   const T &operator*() const { return *data_; }
 
 private:
   T *data_;
-  Context* context_;
+  Context *context_;
 };
 
 // Virtaul base class of context switched between nodes.
@@ -28,7 +29,7 @@ class Context {
 public:
   // Constructs context with pointers to producer and consumer nodes.
   // No ownership.
-  Context() = default;
+  explicit Context(const std::string &name = "") : name_(name){};
   virtual ~Context() = default;
 
   // Not copyable. Movable.
@@ -39,9 +40,9 @@ public:
   const std::vector<Node *> &Consumers() const { return consumers_; };
 
   // Whether can put data to this context.
-  virtual bool CanPut() const = 0;
+  virtual bool CanPut() = 0;
   // Whether can get data from this context.
-  virtual bool CanGet() const = 0;
+  virtual bool CanGet() = 0;
 
   // Puts data to this context.
   // Each producer should only call this function once for the same data.
@@ -68,55 +69,61 @@ protected:
   // Puts data to this context using generic type (void*).
   virtual void PutGeneric(void *value) = 0;
   // Gets data from this context using generic type (void*).
-  virtual void *GetGeneric() const = 0;
+  virtual void *GetGeneric() = 0;
 
-  Node * producer_;
+  std::string name_;
+  Node *producer_;
   std::vector<Node *> consumers_;
 };
 
-template <typename T>
-DataRef<T>::~DataRef() {
-  context_->Release();
-}
-
+template <typename T> DataRef<T>::~DataRef() { context_->Release(); }
 
 template <typename T> class GenericContext : public Context {
 public:
   using Context::Context;
 
-  virtual bool CanPut() const  { return data_ == nullptr; }
-  virtual bool CanGet() const { return data_ != nullptr; }
+  virtual bool CanPut() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return data_ == nullptr;
+  }
+  virtual bool CanGet() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return data_ != nullptr;
+  }
 
 protected:
   virtual void PutGeneric(void *value) {
+    std::lock_guard<std::mutex> lock(mutex_);
     ref_count_ = consumers_.size();
     data_ = std::unique_ptr<T>(reinterpret_cast<T *>(value));
   }
 
-  virtual void *GetGeneric() const {
+  virtual void *GetGeneric() {
+    std::lock_guard<std::mutex> lock(mutex_);
     return reinterpret_cast<void *>(data_.get());
   }
 
   virtual void Release() {
+    std::lock_guard<std::mutex> lock(mutex_);
     if (!--ref_count_) {
       data_ = nullptr;
     }
   }
 
 private:
+  std::mutex mutex_;
   int ref_count_;
   std::unique_ptr<T> data_;
 };
 
 template <typename T> class StreamContext : public GenericContext<T> {
 public:
-
 protected:
   // Unconditionally put.
-  virtual bool CanPut() const { return true; }
-  
+  virtual bool CanPut() { return true; }
+
   // Unconditionally hold.
-  virtual void Relase() final {};
+  virtual void Relase() final{};
 };
 
 } // namespace graph_executor
