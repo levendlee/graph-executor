@@ -2,10 +2,13 @@
 #define _CONTEXT_H_
 
 #include <cassert>
+#include <chrono>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <queue>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace graph_executor {
@@ -37,8 +40,9 @@ public:
   Context(const Context &other) = delete;
   Context(Context &&other) = default;
 
-  const Node *Producer() const { return producer_; };
-  const std::vector<Node *> &Consumers() const { return consumers_; };
+  const std::string &Name() const { return name_; }
+  const Node *Producer() const { return producer_; }
+  const std::vector<Node *> &Consumers() const { return consumers_; }
 
   // Whether can put data to this context.
   virtual bool CanPut() = 0;
@@ -48,6 +52,11 @@ public:
   // Puts data to this context.
   // Each producer should only call this function once for the same data.
   template <typename T> void Put(T &&value) {
+    if (!CanPut()) {
+      std::cerr << Name() << "$\n";
+      std::cerr.flush();
+      std::this_thread::sleep_for(std::chrono::seconds(10));
+    }
     assert(CanPut());
     PutGeneric(reinterpret_cast<void *>(new T(value)));
   }
@@ -55,6 +64,11 @@ public:
   // Conceptually, there are N copies for N consumers.
   // Each consumer should only call this function once for the same data.
   template <typename T> DataRef<T> Get() {
+    if (!CanGet()) {
+      std::cerr << Name() << "#\n";
+      std::cerr.flush();
+      std::this_thread::sleep_for(std::chrono::seconds(10));
+    }
     assert(CanGet());
     return DataRef<T>(reinterpret_cast<T *>(GetGeneric()), this);
   }

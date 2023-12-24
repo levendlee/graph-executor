@@ -2,7 +2,6 @@
 #define _GRAPH_H_
 
 #include <condition_variable>
-#include <future>
 #include <memory>
 #include <queue>
 #include <thread>
@@ -42,7 +41,6 @@ private:
   int concurrent_execution_;
 
   std::mutex mutex_;
-  std::condition_variable main_cv_;
   std::condition_variable client_cv_;
   std::condition_variable worker_cv_;
 

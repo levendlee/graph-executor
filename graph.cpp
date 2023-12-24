@@ -6,8 +6,8 @@
 namespace graph_executor {
 
 namespace {
-std::unordered_set<Node*> GetConsumerNodes(Node* node) {
-  std::unordered_set<Node*> consumers;
+std::unordered_set<Node *> GetConsumerNodes(Node *node) {
+  std::unordered_set<Node *> consumers;
   for (Context *c : node->Outputs()) {
     for (Node *n : c->Consumers()) {
       consumers.insert(n);
@@ -15,7 +15,7 @@ std::unordered_set<Node*> GetConsumerNodes(Node* node) {
   }
   return consumers;
 }
-}
+} // namespace
 
 void Graph::SetUp(int num_threads) {
   // Figures out inputs and outputs.
@@ -29,7 +29,7 @@ void Graph::SetUp(int num_threads) {
     }
   }
 
-  // Uses special `NoOpNode` to represents them, starting the begining and
+  // Uses special `NoOpNode` to represents them, indicating the begin and
   // the end of execution.
   input_node_ = new NoOpNode("input");
   nodes_.emplace_back(input_node_);
@@ -39,7 +39,7 @@ void Graph::SetUp(int num_threads) {
   nodes_.emplace_back(output_node_);
   output_node_->Bind(outputs, {});
 
-  // Initiates all the threads.
+  // Set up all the worker threads.
   active_ = true;
   for (int i = 0; i < num_threads; ++i) {
     threads_.emplace_back(std::thread(&Graph::WorkerThread, this, i));
@@ -47,7 +47,7 @@ void Graph::SetUp(int num_threads) {
 }
 
 void Graph::TearDown() {
-  // Teardown all the threads.
+  // Tear down all the worker threads.
   {
     std::unique_lock<std::mutex> lk(mutex_);
     active_ = false;
@@ -64,14 +64,14 @@ void Graph::WorkerThread(int thread_id) {
     bool complete = false;
     {
       // Waits for the client to assign task or to tear down the thread.
-      // Skip waiting if there is existing tasks or thread is being teared
+      // Skips waiting if there is existing tasks or thread is being teared
       // down to avoid race condition.
       std::unique_lock<std::mutex> lk(mutex_);
       if (queue_.empty() && active_) {
         worker_cv_.wait(lk, [&] { return !queue_.empty() || !active_; });
       }
 
-      // The graph is being deconstructed, teardown the thread.
+      // The graph is being deconstructed, tear down the thread.
       if (!active_) {
         return;
       }
@@ -80,7 +80,7 @@ void Graph::WorkerThread(int thread_id) {
       node = queue_.front();
       queue_.pop();
 
-      // Notifies sleeping client the work is done.
+      // Notifies the sleeping client that the graph execution request is done.
       if (node == output_node_) {
         if (!--concurrent_execution_) {
           complete = true;
@@ -94,13 +94,16 @@ void Graph::WorkerThread(int thread_id) {
     }
 
     // Runs the task outside of lock.
+    std::cerr << "Executing Node=" << node->Name() << " on Worker=" << thread_id
+              << "\n";
+    std::cerr.flush();
     node->Execute();
-   
+
     // Finds new tasks from downstream consumers.
-    std::unordered_set<Node*> consumers = GetConsumerNodes(node);
+    std::unordered_set<Node *> consumers = GetConsumerNodes(node);
     {
       std::unique_lock<std::mutex> lk(mutex_);
-      for (Node* n : consumers) {
+      for (Node *n : consumers) {
         if (n->IsReady()) {
           queue_.push(n);
         }
@@ -121,13 +124,13 @@ void Graph::Execute(int num_executions) {
     }
     concurrent_execution_ = num_executions;
   }
-  
+
   worker_cv_.notify_all();
 
   {
     std::unique_lock<std::mutex> lk(mutex_);
     // Waits for a worker to notify completion.
-    // Skip waiting if the job is already completed to avoid race condition.
+    // Skips waiting if the job is already completed to avoid race condition.
     if (!concurrent_execution_) {
       return;
     }
